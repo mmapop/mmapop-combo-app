@@ -100,12 +100,17 @@ body {
   background: var(--dark);
   border-bottom: 1px solid var(--border);
   padding: 0 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs-inner {
   max-width: 900px;
   margin: 0 auto;
   display: flex;
   gap: 0;
+  min-width: max-content;
 }
 .tab-btn {
   font-family: 'DM Sans', sans-serif;
@@ -119,6 +124,7 @@ body {
   cursor: pointer;
   transition: all 0.15s;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -274,6 +280,8 @@ body {
 .ex-cat-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .ex-cat-btn { font-size: 11px; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
 .ex-cat-btn.active { background: var(--accent); border-color: var(--accent); color: var(--black); font-weight: 500; }
+.auto-filter-btn { font-size: 11px; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+.auto-filter-btn.active { background: var(--accent); border-color: var(--accent); color: var(--black); font-weight: 500; }
 .ex-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 200px; overflow-y: auto; }
 .ex-item { font-size: 11px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--black); color: #ccc; cursor: pointer; transition: all 0.15s; text-align: left; font-family: 'DM Sans', sans-serif; line-height: 1.3; }
 .ex-item:hover { border-color: var(--border-light); color: var(--text); }
@@ -1668,6 +1676,7 @@ const SEQ_CATS = ['lower','upper','core','full'];
 const SEQ_COLORS = {lower:'#ff7c4a',upper:'#4a9eff',core:'#c84aff',full:'#4affc8'};
 const SEQ_LABELS = {lower:'Lower Body',upper:'Upper Body',core:'Core',full:'Full Body'};
 let autoSessionPlan = [];
+let autoComboFilter = 'All';
 
 function setMode(mode) {
   trainMode = mode;
@@ -1680,14 +1689,23 @@ function setMode(mode) {
   if (mode === 'auto') generateAutoPlan();
 }
 
+function setAutoFilter(btn, style) {
+  autoComboFilter = style;
+  document.querySelectorAll('.auto-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  generateAutoPlan();
+}
+
 function generateAutoPlan() {
   trainRounds = parseInt(document.getElementById('train-rounds').value);
   autoSessionPlan = [];
+  const pool = autoComboFilter === 'All' ? COMBOS : COMBOS.filter(c => c.cat === autoComboFilter);
+  const filteredPool = pool.length ? pool : COMBOS;
   for (let r = 0; r < trainRounds; r++) {
     const catKey = SEQ_CATS[r % 4];
     const exPool = TRAIN_EX[catKey];
     const ex = exPool[Math.floor(Math.random() * exPool.length)];
-    const combo = COMBOS[Math.floor(Math.random() * COMBOS.length)];
+    const combo = filteredPool[Math.floor(Math.random() * filteredPool.length)];
     autoSessionPlan.push({ round: r + 1, combo, ex, catKey });
   }
   renderAutoPlan();
@@ -2008,17 +2026,19 @@ function startDrill(id) {
   if (drillTimers[id]) stopDrill(id);
   const sel = document.getElementById(`drill-sel-${id}`);
   const dur = parseInt(sel.value);
-  drillTimers[id] = { total: dur, left: dur, paused: false, interval: null };
+  const startTime = performance.now();
+  drillTimers[id] = { total: dur, left: dur, paused: false, interval: null, startTime, pausedAt: null, elapsed: 0 };
   document.getElementById(`drill-active-${id}`).classList.add('show');
   document.getElementById(`drill-time-${id}`).textContent = drillFmt(dur);
   document.getElementById(`drill-time-${id}`).className = 'drill-time-display';
   document.getElementById(`drill-fill-${id}`).style.width = '100%';
   document.getElementById(`drill-pause-${id}`).textContent = 'Pause';
   if (audioCtx || window.AudioContext || window.webkitAudioContext) playBell('start');
-  drillTimers[id].interval = setInterval(() => {
+  function drillTick() {
     const t = drillTimers[id];
-    if (t.paused) return;
-    t.left--;
+    if (!t || t.paused) return;
+    const elapsed = t.elapsed + Math.floor((performance.now() - t.startTime) / 1000);
+    t.left = Math.max(0, t.total - elapsed);
     const pct = Math.round((t.left / t.total) * 100);
     const el = document.getElementById(`drill-time-${id}`);
     if (el) {
@@ -2033,25 +2053,66 @@ function startDrill(id) {
       clearInterval(t.interval);
       if (el) { el.textContent = 'Done!'; el.className = 'drill-time-display'; }
       if (fill) fill.style.width = '0%';
+      return;
     }
-  }, 1000);
+    const drift = (performance.now() - t.startTime + t.elapsed * 1000) % 1000;
+    clearTimeout(t.interval);
+    t.interval = setTimeout(drillTick, 1000 - drift);
+  }
+  drillTimers[id].tick = drillTick;
+  drillTimers[id].interval = setTimeout(drillTick, 1000);
 }
 
 function toggleDrill(id) {
   if (!drillTimers[id]) return;
-  drillTimers[id].paused = !drillTimers[id].paused;
+  const t = drillTimers[id];
+  t.paused = !t.paused;
   const btn = document.getElementById(`drill-pause-${id}`);
-  if (btn) btn.textContent = drillTimers[id].paused ? 'Resume' : 'Pause';
+  if (btn) btn.textContent = t.paused ? 'Resume' : 'Pause';
+  if (t.paused) {
+    t.elapsed += Math.floor((performance.now() - t.startTime) / 1000);
+    t.pausedAt = performance.now();
+    clearTimeout(t.interval);
+  } else {
+    t.startTime = performance.now();
+    t.interval = setTimeout(t.tick, 1000);
+  }
 }
 
 function stopDrill(id) {
   if (drillTimers[id]) {
-    clearInterval(drillTimers[id].interval);
+    clearTimeout(drillTimers[id].interval);
     delete drillTimers[id];
   }
   const active = document.getElementById(`drill-active-${id}`);
   if (active) active.classList.remove('show');
 }
+
+// Page Visibility API — resync both timers when user returns from another app
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    // Resync train session timer
+    if (typeof trainInterval !== 'undefined' && trainInterval && !trainPaused) {
+      clearTimeout(trainInterval);
+      const elapsed = Math.floor((performance.now() - trainPhaseStartTime) / 1000);
+      trainTimeLeft = Math.max(0, trainTotalPhaseTime - elapsed);
+      if (trainTimeLeft <= 0) {
+        trainNextPhase();
+      } else {
+        const drift = (performance.now() - trainPhaseStartTime) % 1000;
+        trainInterval = setTimeout(trainTick, 1000 - drift);
+      }
+    }
+    // Resync all active drill timers
+    Object.keys(drillTimers).forEach(id => {
+      const t = drillTimers[id];
+      if (t && !t.paused && t.tick) {
+        clearTimeout(t.interval);
+        t.interval = setTimeout(t.tick, 100);
+      }
+    });
+  }
+});
 
 initStats();
 initCotd();
@@ -2199,6 +2260,15 @@ render();
     <!-- AUTO MODE — Session preview -->
     <div class="train-card" id="auto-session-card" style="display:none;">
       <div class="train-card-label">Your Auto Session Plan</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Combo Style</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <button class="auto-filter-btn active" onclick="setAutoFilter(this,'All')">All</button>
+          <button class="auto-filter-btn" onclick="setAutoFilter(this,'Boxing')">Boxing</button>
+          <button class="auto-filter-btn" onclick="setAutoFilter(this,'Kickboxing')">Kickboxing</button>
+          <button class="auto-filter-btn" onclick="setAutoFilter(this,'Muay Thai')">Muay Thai</button>
+        </div>
+      </div>
       <div style="background:rgba(232,255,0,0.06);border:1px solid rgba(232,255,0,0.15);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
         <div style="font-size:11px;color:var(--accent);font-weight:500;margin-bottom:3px;">Coach's Full Body Sequence</div>
         <div style="font-size:11px;color:var(--muted);line-height:1.55;">Each round gets a random combo from the library. Exercises follow Lower → Upper → Core → Full Body pattern so you hit every muscle group.</div>
