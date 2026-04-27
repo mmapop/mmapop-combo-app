@@ -1677,6 +1677,33 @@ const SEQ_COLORS = {lower:'#ff7c4a',upper:'#4a9eff',core:'#c84aff',full:'#4affc8
 const SEQ_LABELS = {lower:'Lower Body',upper:'Upper Body',core:'Core',full:'Full Body'};
 let autoSessionPlan = [];
 let autoComboFilter = 'All';
+let autoSessionType = 'progressive';
+let autoSingleLevel = 'Beginner';
+
+function setSessionType(btn, type) {
+  autoSessionType = type;
+  document.querySelectorAll('#session-type-progressive,#session-type-single').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const levelRow = document.getElementById('single-level-row');
+  const desc = document.getElementById('auto-session-desc');
+  if (type === 'single') {
+    levelRow.style.display = 'block';
+    if (desc) desc.textContent = `Every round uses a ${autoSingleLevel} combo. Exercises follow Lower → Upper → Core → Full Body pattern.`;
+  } else {
+    levelRow.style.display = 'none';
+    if (desc) desc.textContent = 'Each round builds from Beginner → Intermediate → Advanced. Exercises follow Lower → Upper → Core → Full Body pattern.';
+  }
+  generateAutoPlan();
+}
+
+function setSingleLevel(btn, level) {
+  autoSingleLevel = level;
+  document.querySelectorAll('#level-btn-beginner,#level-btn-intermediate,#level-btn-advanced').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const desc = document.getElementById('auto-session-desc');
+  if (desc) desc.textContent = `Every round uses a ${level} combo. Exercises follow Lower → Upper → Core → Full Body pattern.`;
+  generateAutoPlan();
+}
 
 function setMode(mode) {
   trainMode = mode;
@@ -1699,23 +1726,47 @@ function setAutoFilter(btn, style) {
 function generateAutoPlan() {
   trainRounds = parseInt(document.getElementById('train-rounds').value);
   autoSessionPlan = [];
-  const pool = autoComboFilter === 'All' ? COMBOS : COMBOS.filter(c => c.cat === autoComboFilter);
-  const filteredPool = pool.length ? pool : COMBOS;
+  const stylePool = autoComboFilter === 'All' ? COMBOS : COMBOS.filter(c => c.cat === autoComboFilter);
+  const fallback = stylePool.length ? stylePool : COMBOS;
+
   for (let r = 0; r < trainRounds; r++) {
     const catKey = SEQ_CATS[r % 4];
     const exPool = TRAIN_EX[catKey];
     const ex = exPool[Math.floor(Math.random() * exPool.length)];
-    const combo = filteredPool[Math.floor(Math.random() * filteredPool.length)];
-    autoSessionPlan.push({ round: r + 1, combo, ex, catKey });
+
+    let level;
+    if (autoSessionType === 'single') {
+      level = autoSingleLevel;
+    } else {
+      const progress = r / Math.max(trainRounds - 1, 1);
+      if (trainRounds <= 2) {
+        level = r === 0 ? 'Beginner' : 'Intermediate';
+      } else if (progress < 0.34) {
+        level = 'Beginner';
+      } else if (progress < 0.67) {
+        level = 'Intermediate';
+      } else {
+        level = 'Advanced';
+      }
+    }
+
+    let pool = fallback.filter(c => c.level === level);
+    if (!pool.length) pool = fallback;
+    const combo = pool[Math.floor(Math.random() * pool.length)];
+    autoSessionPlan.push({ round: r + 1, combo, ex, catKey, level });
   }
   renderAutoPlan();
 }
 
 function renderAutoPlan() {
+  const levelColors = { Beginner: '#4affc8', Intermediate: '#4a9eff', Advanced: '#ff7c4a' };
   const list = document.getElementById('auto-plan-list');
   list.innerHTML = autoSessionPlan.map(p => `
     <div class="auto-plan-row">
-      <div class="auto-plan-round">Round ${p.round} of ${trainRounds}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+        <div class="auto-plan-round">Round ${p.round} of ${trainRounds}</div>
+        <div style="font-size:9px;padding:1px 7px;border-radius:10px;background:${levelColors[p.level] || '#888'}22;color:${levelColors[p.level] || '#888'};border:1px solid ${levelColors[p.level] || '#888'}44;">${p.level}</div>
+      </div>
       <div class="auto-plan-combo">${p.combo.name}</div>
       <div class="auto-plan-ex">
         <div class="auto-plan-ex-dot" style="background:${SEQ_COLORS[p.catKey]}"></div>
@@ -2274,9 +2325,23 @@ render();
           <button class="auto-filter-btn" onclick="setAutoFilter(this,'Muay Thai')">Muay Thai</button>
         </div>
       </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Session Type</div>
+        <div style="display:flex;gap:6px;">
+          <button class="auto-filter-btn active" id="session-type-progressive" onclick="setSessionType(this,'progressive')">📈 Progressive</button>
+          <button class="auto-filter-btn" id="session-type-single" onclick="setSessionType(this,'single')">Single Level</button>
+        </div>
+        <div id="single-level-row" style="display:none;margin-top:8px;display:none;">
+          <div style="display:flex;gap:6px;">
+            <button class="auto-filter-btn active" id="level-btn-beginner" onclick="setSingleLevel(this,'Beginner')">Beginner</button>
+            <button class="auto-filter-btn" id="level-btn-intermediate" onclick="setSingleLevel(this,'Intermediate')">Intermediate</button>
+            <button class="auto-filter-btn" id="level-btn-advanced" onclick="setSingleLevel(this,'Advanced')">Advanced</button>
+          </div>
+        </div>
+      </div>
       <div style="background:rgba(232,255,0,0.06);border:1px solid rgba(232,255,0,0.15);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
         <div style="font-size:11px;color:var(--accent);font-weight:500;margin-bottom:3px;">Coach's Full Body Sequence</div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.55;">Each round gets a random combo from the library. Exercises follow Lower → Upper → Core → Full Body pattern so you hit every muscle group.</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.55;" id="auto-session-desc">Each round builds from Beginner → Intermediate → Advanced. Exercises follow Lower → Upper → Core → Full Body pattern.</div>
       </div>
       <div id="auto-plan-list" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;"></div>
       <button style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;" onclick="generateAutoPlan()">&#8635; Regenerate Plan</button>
