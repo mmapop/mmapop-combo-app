@@ -1158,6 +1158,18 @@ const COMBOS = [
   {id:"NB6",cat:"Footwork",level:"Advanced",name:"Jab – Lead Hook – Cross – Side Step Right – Cross – Lead Hook – Cross",seq:[{t:"Jab",c:"punch"},{t:"Lead Hook",c:"punch"},{t:"Cross",c:"punch"},{t:"Side Step Right",c:"defense"},{t:"Cross",c:"punch"},{t:"Lead Hook",c:"punch"},{t:"Cross",c:"punch"}],tip:"Three punch entry, side step right to get outside their guard, fire the final three from the new angle."},
 ];
 
+// ===== LENGTH-BASED LEVEL SYSTEM =====
+// 1–4 moves = Beginner, 5–8 = Intermediate, 9+ = Advanced
+function getLevelByLength(seq) {
+  const n = seq.length;
+  if (n <= 4) return 'Beginner';
+  if (n <= 8) return 'Intermediate';
+  return 'Advanced';
+}
+
+// Remap all combo levels at runtime — no manual retagging needed
+COMBOS.forEach(c => { c.level = getLevelByLength(c.seq); });
+
 let activeFilters = { cat: 'all', level: 'all' };
 let searchTerm = '';
 let openId = null;
@@ -1173,54 +1185,111 @@ function getLevelTag(level) {
 }
 
 // ===== NOTATION SYSTEM =====
-const NOTATION = {
-  'Jab': '1', 'Cross': '2', 'Lead Hook': '3', 'Rear Hook': '4',
-  'Lead Uppercut': '5', 'Rear Uppercut': '6',
-  'Jab High': '1H', 'Jab Low': '1L', 'Cross Low': '2L', 'Cross High': '2H',
-  'Cross Body': '2B', 'Lead Body Hook': '3B', 'Rear Body Hook': '4B',
-  'Body Hook': '3B', 'Body Shot': 'BS', 'Right Body Shot': '2B', 'Left Body Shot': '3B',
-  'Lead Hook High': '3H', 'Lead Hook Cross': '3-2',
-  'Overhand Right': 'OH', 'Power Cross': '2!',
-  'Slip': 'Slip', 'Roll': 'Roll', 'Roll Right': 'Roll R', 'Roll Left': 'Roll L',
-  'Bob & Weave': 'B&W', 'Parry': 'Parry', 'Block': 'Block',
-  'Check': 'Check', 'Lean Back': 'LB', 'Duck': 'Duck',
-  'Side Step Right': 'SS-R', 'Side Step Left': 'SS-L', 'Step Right': 'S-R',
-  'Back Step': 'BS', 'Pivot': 'Pvt', 'Angle Out': 'Ang', 'Exit': 'Exit',
-  'Parry Exit': 'Prry-X', 'Switch Stance': 'SW', 'Slip Cross': 'SlpX',
-  'Slip Jab': 'SlpJ', 'Feint Teep': 'Fnt',
-  'Teep': 'Teep', 'Lead Teep': 'LT', 'Rear Teep': 'RT',
-  'Push Kick': 'PK', 'Left Push Kick': 'LPK', 'Right Push Kick': 'RPK',
-  'Side Push Kick': 'SPK', 'Jumping Push Kick': 'JPK',
-  'Round Kick': 'RK', 'Lead Round Kick': 'LRK', 'Rear Round Kick': 'RRK',
-  'Left Round Kick': 'LRK', 'Right Round Kick': 'RRK', 'Left Kick': 'LK',
-  'Right Kick': 'RK', 'High Kick': 'HK', 'Low Kick': 'LowK',
-  'Rear Low Kick': 'RLK', 'Lead Low Kick': 'LLK', 'Inside Kick': 'IK',
-  'Switch Kick': 'SwK', 'Jump Right Round Kick': 'JRK',
-  'Jumping Right Roundhouse': 'JRH', 'Jumping Roundhouse': 'JRH',
-  'Left Roundhouse': 'LRH', 'Right Roundhouse': 'RRH',
-  'Rear Roundhouse': 'RRH', 'Lead Roundhouse': 'LRH', 'Rear Round Kick': 'RRK',
-  'Rear Knee': 'RK', 'Lead Knee': 'LK', 'Knee': 'K', 'Knee x4': 'K×4',
-  'Flying Knee': 'FK', 'Rear Flying Knee': 'RFK', 'Jump Right Round Kick': 'JRK',
-  'Superman Punch': 'SP', 'Right Superman Punch': 'SP',
-  'Rear Elbow': 'RE', 'Lead Elbow': 'LE', 'Elbow': 'E',
-  'Spinning Back Elbow': 'SBE', 'Elbow Break': 'EB',
-  'Clinch': 'Clinch', 'Clinch Entry': 'CE', 'Clinch Grab': 'CG',
-  'Body Lock': 'BL', 'Sweep': 'Swp', 'Inside Trip': 'IT',
-  'Turn & Dump': 'T&D', 'Knee Dump': 'KD', 'Duck Under': 'DU',
-  'Frame': 'Frm', 'Catch Kick': 'CK', 'Leg Catch': 'LC',
-  'Angle Out': 'Ang', 'Side Exit': 'SX', 'Exit Right': 'XR', 'Exit Left': 'XL',
-  'Step Jab': '1-step', 'Cross Body': '2B',
-};
+// Punches: 1-6, body variants add B (3B, 2B etc.)
+// Kicks/Knees/Elbows: L or R prefix + short name
+// Slips/Rolls/Steps: Slip L, Slip R, Roll L, Roll R etc.
+// Neutral moves: just the name
 
 function getNotation(name) {
-  if (NOTATION[name]) return NOTATION[name];
-  if (name.includes('Jab')) return '1';
-  if (name.includes('Cross')) return '2';
-  if (name.includes('Hook') && name.includes('Lead')) return '3';
-  if (name.includes('Hook') && name.includes('Rear')) return '4';
-  if (name.includes('Uppercut') && name.includes('Lead')) return '5';
-  if (name.includes('Uppercut') && name.includes('Rear')) return '6';
-  return null;
+  const n = name.trim();
+
+  // ── PUNCHES ──────────────────────────────────────────
+  if (n === 'Jab' || n === 'Step Jab' || n === 'Double Jab') return n === 'Double Jab' ? '1-1' : '1';
+  if (n === 'Cross' || n === 'Power Cross' || n === 'Overhand Right') return '2';
+  if (n === 'Counter Cross') return '2';
+  if ((n.includes('Hook') || n.includes('hook')) && (n.includes('Lead') || n.includes('Left')) && !n.includes('Body')) return '3';
+  if ((n.includes('Hook') || n.includes('hook')) && (n.includes('Rear') || n.includes('Right')) && !n.includes('Body')) return '4';
+  if (n.includes('Uppercut') && (n.includes('Lead') || n.includes('Left'))) return '5';
+  if (n.includes('Uppercut') && (n.includes('Rear') || n.includes('Right'))) return '6';
+
+  // ── BODY PUNCHES ─────────────────────────────────────
+  if (n === 'Lead Body Hook' || n === 'Left Body Shot' || n === 'Left Body Hook') return '3B';
+  if (n === 'Rear Body Hook' || n === 'Right Body Shot' || n === 'Right Body Hook') return '4B';
+  if (n === 'Cross Body' || n === 'Cross to Body' || n === '2B') return '2B';
+  if (n === 'Lead Body Hook – Lead Hook') return '3B-3';
+  if (n.includes('Body') && n.includes('Lead')) return '3B';
+  if (n.includes('Body') && n.includes('Rear')) return '4B';
+  if (n.includes('Body') && n.includes('Right')) return '2B';
+
+  // ── KICKS ────────────────────────────────────────────
+  if (n.includes('Lead') && n.includes('Teep')) return 'L Teep';
+  if (n.includes('Rear') && n.includes('Teep')) return 'R Teep';
+  if (n === 'Teep Reset' || n === 'Teep') return 'Teep';
+  if (n.includes('Lead') && (n.includes('Push Kick') || n.includes('Push kick'))) return 'L Push Kick';
+  if (n.includes('Rear') && (n.includes('Push Kick'))) return 'R Push Kick';
+  if (n.includes('Jumping') && n.includes('Push Kick')) return 'Jump Push Kick';
+  if (n.includes('Lead') && (n.includes('Round') || n.includes('Roundhouse'))) return 'L Round Kick';
+  if (n.includes('Rear') && (n.includes('Round') || n.includes('Roundhouse'))) return 'R Round Kick';
+  if (n.includes('Left') && (n.includes('Round') || n.includes('Kick'))) return 'L Round Kick';
+  if (n.includes('Right') && (n.includes('Round') || n.includes('Kick'))) return 'R Round Kick';
+  if (n.includes('Switch Kick') || n.includes('Switch kick')) return 'Switch Kick';
+  if (n.includes('Jumping Rear Roundhouse')) return 'Jump R Round Kick';
+  if (n.includes('Jump Rear Round')) return 'Jump R Round Kick';
+  if (n.includes('Rear Low Kick')) return 'R Low Kick';
+  if (n.includes('Lead Low Kick')) return 'L Low Kick';
+  if (n.includes('Low Kick')) return 'Low Kick';
+  if (n.includes('Side Kick')) return 'L Side Kick';
+  if (n.includes('High Kick')) return 'R High Kick';
+  if (n.includes('Flying Knee') && n.includes('Rear')) return 'R Flying Knee';
+  if (n.includes('Flying Knee') && n.includes('Lead')) return 'L Flying Knee';
+  if (n.includes('Flying Knee')) return 'Flying Knee';
+
+  // ── KNEES ────────────────────────────────────────────
+  if (n.includes('Rear') && n.includes('Knee')) return 'R Knee';
+  if (n.includes('Lead') && n.includes('Knee')) return 'L Knee';
+  if (n === 'Knee' || n === 'Knee x4' || n === '4x Knees' || n === '2x Knees') return 'Knee';
+
+  // ── ELBOWS ───────────────────────────────────────────
+  if (n.includes('Rear') && n.includes('Elbow')) return 'R Elbow';
+  if (n.includes('Lead') && n.includes('Elbow')) return 'L Elbow';
+  if (n.includes('Spinning') && n.includes('Elbow')) return 'Spinning Elbow';
+  if (n === 'Elbow') return 'Elbow';
+
+  // ── SLIPS / ROLLS / FOOTWORK ─────────────────────────
+  if (n === 'Slip Right' || n === 'Slip R') return 'Slip R';
+  if (n === 'Slip Left' || n === 'Slip L') return 'Slip L';
+  if (n === 'Slip Cross') return 'Slip R';
+  if (n === 'Slip Jab') return 'Slip L';
+  if (n === 'Slip') return 'Slip';
+  if (n === 'Roll Right' || n === 'Roll R') return 'Roll R';
+  if (n === 'Roll Left' || n === 'Roll L') return 'Roll L';
+  if (n === 'Roll') return 'Roll';
+  if (n === 'Bob & Weave') return 'Bob & Weave';
+  if (n === 'Side Step Right') return 'Step R';
+  if (n === 'Side Step Left') return 'Step L';
+  if (n === 'Step Right') return 'Step R';
+  if (n === 'Back Step') return 'Back Step';
+  if (n === 'Switch' || n === 'Switch Stance') return 'Switch';
+  if (n === 'Shuffle') return 'Shuffle';
+  if (n === 'Pivot') return 'Pivot';
+  if (n.includes('Exit Right')) return 'Exit R';
+  if (n.includes('Exit Left')) return 'Exit L';
+  if (n.includes('Angle Out') || n.includes('Angle Off')) return 'Angle Out';
+  if (n.includes('Lean Back')) return 'Lean Back';
+  if (n === 'Check' || n.includes('Check Kick') || n.includes('Check Low')) return 'Check';
+  if (n === 'Parry') return 'Parry';
+  if (n === 'Block') return 'Block';
+  if (n === 'Duck Under') return 'Duck Under';
+
+  // ── CLINCH / GRAPPLING ───────────────────────────────
+  if (n.includes('Clinch')) return 'Clinch';
+  if (n.includes('Sweep')) return 'Sweep';
+  if (n.includes('Body Lock')) return 'Body Lock';
+  if (n.includes('Inside Trip')) return 'Trip';
+  if (n.includes('Turn & Dump') || n.includes('Knee Dump')) return 'Dump';
+  if (n.includes('Leg Catch') || n.includes('Catch Kick')) return 'Catch';
+  if (n.includes('Shoulder Push')) return 'Shoulder Push';
+
+  // ── SPECIAL / NEUTRAL ────────────────────────────────
+  if (n.includes('Superman')) return 'Superman';
+  if (n.includes('Counter Cross')) return '2';
+  if (n.includes('Overhand')) return 'OH';
+  if (n.includes('Feint')) return 'Feint';
+  if (n.includes('Jab')) return '1';
+  if (n.includes('Cross')) return '2';
+
+  // fallback — return the name as-is
+  return n;
 }
 
 function buildNotation(seq) {
@@ -1237,6 +1306,14 @@ function buildSequence(seq) {
   }).join('');
 }
 
+function buildNumberedSequence(seq) {
+  return seq.map((s, i) => {
+    const cls = getStrikeClass(s.c);
+    const label = getNotation(s.t);
+    return `<span class="strike ${cls}" style="display:inline-flex;align-items:center;gap:4px;"><span style="font-size:9px;opacity:0.7;font-weight:700;">${i + 1}.</span>${label}</span>`;
+  }).join('<span class="arrow" style="margin:0 2px;">›</span>');
+}
+
 function filter() {
   return COMBOS.filter(c => {
     const catOk = activeFilters.cat === 'all' || c.cat === activeFilters.cat;
@@ -1250,7 +1327,7 @@ function filter() {
       c.seq.some(s => s.t.toLowerCase().includes(search)) ||
       (c.tip && c.tip.toLowerCase().includes(search));
     return catOk && levelOk && searchOk;
-  });
+  }).sort((a, b) => a.seq.length - b.seq.length);
 }
 
 function render() {
@@ -1287,8 +1364,13 @@ function render() {
         </div>
       </div>
       ${isOpen ? `<div class="combo-body">
-        <div class="sequence">${buildSequence(c.seq)}</div>
-        ${buildNotation(c.seq) ? `<div style="font-size:10px;color:var(--muted);margin:6px 0 10px;letter-spacing:0.04em;font-family:monospace;">${buildNotation(c.seq)}</div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;">
+          ${c.seq.map((s, i) => {
+            const cls = getStrikeClass(s.c);
+            const label = getNotation(s.t);
+            return `<span class="strike ${cls}" style="font-size:13px;padding:5px 11px;font-weight:600;">${label}</span>${i < c.seq.length - 1 ? '<span style="color:var(--border-light);font-size:14px;">›</span>' : ''}`;
+          }).join('')}
+        </div>
         <div class="combo-tip"><span class="tip-label">Coach tip: </span>${c.tip}</div>
         <div class="notes-label">My notes</div>
         <textarea class="notes-area" placeholder="Add your own notes for this combo..." onchange="saveNote('${c.id}', this.value)" onclick="event.stopPropagation()">${notes[c.id] || ''}</textarea>
@@ -1542,7 +1624,13 @@ function renderMyList() {
           </div>
         </div>
         ${isOpen ? `<div class="combo-body">
-          <div class="sequence">${buildSequence(c.seq)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;">
+            ${c.seq.map((s, i) => {
+              const cls = getStrikeClass(s.c);
+              const label = getNotation(s.t);
+              return `<span class="strike ${cls}" style="font-size:13px;padding:5px 11px;font-weight:600;">${label}</span>${i < c.seq.length - 1 ? '<span style="color:var(--border-light);font-size:14px;">›</span>' : ''}`;
+            }).join('')}
+          </div>
           <div class="combo-tip"><span class="tip-label">Coach tip: </span>${c.tip}</div>
           <div class="notes-label">My notes</div>
           <textarea class="notes-area" placeholder="Add your own notes..." onchange="saveNote('${c.id}', this.value)" onclick="event.stopPropagation()">${notes[c.id] || ''}</textarea>
@@ -1769,6 +1857,25 @@ function generateAutoPlan() {
   const stylePool = autoComboFilter === 'All' ? COMBOS : COMBOS.filter(c => c.cat === autoComboFilter);
   const fallback = stylePool.length ? stylePool : COMBOS;
 
+  // Track used combo IDs per level to prevent duplicates
+  const usedByLevel = {};
+
+  function pickCombo(level) {
+    let pool = fallback.filter(c => c.level === level);
+    if (!pool.length) pool = fallback;
+    if (!usedByLevel[level]) usedByLevel[level] = new Set();
+    // Filter out already-used combos
+    let available = pool.filter(c => !usedByLevel[level].has(c.name));
+    // If we've exhausted all combos for this level, reset and reuse
+    if (!available.length) {
+      usedByLevel[level].clear();
+      available = pool;
+    }
+    const combo = available[Math.floor(Math.random() * available.length)];
+    usedByLevel[level].add(combo.name);
+    return combo;
+  }
+
   for (let r = 0; r < trainRounds; r++) {
     const catKey = SEQ_CATS[r % 4];
     const exPool = TRAIN_EX[catKey];
@@ -1790,10 +1897,10 @@ function generateAutoPlan() {
       }
     }
 
-    let pool = fallback.filter(c => c.level === level);
-    if (!pool.length) pool = fallback;
-    const combo = pool[Math.floor(Math.random() * pool.length)];
-    autoSessionPlan.push({ round: r + 1, combo, ex, catKey, level });
+    const combo = pickCombo(level);
+    // Use length-based level for display label too
+    const displayLevel = getLevelByLength(combo.seq);
+    autoSessionPlan.push({ round: r + 1, combo, ex, catKey, level: displayLevel });
   }
   renderAutoPlan();
 }
@@ -1824,10 +1931,10 @@ function startAutoSession() {
     const p = autoSessionPlan[i];
     const r = p.round;
     trainPhases.push({type:'combo', name:'Combo Work', detail:'Full intensity on the bag', dur: trainRoundLen, color:'var(--accent)', cls:'combo', round: r, ex: p.ex, combo: p.combo});
+    trainPhases.push({type:'rest0', name:'Rest', detail:'Get ready for your exercise', dur: 20, color:'var(--defense)', cls:'rest-s', round: r, ex: p.ex, combo: p.combo});
     trainPhases.push({type:'ex1', name: p.ex, detail:'Set 1 — go hard', dur: 40, color:'var(--punch)', cls:'ex', round: r, ex: p.ex, combo: p.combo});
     trainPhases.push({type:'rest1', name:'Rest', detail:'Catch your breath', dur: 20, color:'var(--defense)', cls:'rest-s', round: r, ex: p.ex, combo: p.combo});
     trainPhases.push({type:'ex2', name: p.ex, detail:'Set 2 — finish strong', dur: 40, color:'var(--punch)', cls:'ex', round: r, ex: p.ex, combo: p.combo});
-    trainPhases.push({type:'rest2', name:'Rest', detail:'Get ready', dur: 20, color:'var(--defense)', cls:'rest-s', round: r, ex: p.ex, combo: p.combo});
     if (r < trainRounds) trainPhases.push({type:'rest', name:'Rest', detail:'Bell rings for next round', dur: 60, color:'var(--muted)', cls:'rest', round: r, ex: p.ex, combo: p.combo});
   }
   trainPhaseIdx = 0;
@@ -1868,9 +1975,18 @@ function trainUnlockAudio() {
   ctx.resume().then(() => {
     trainSoundOn = true;
     playBell('start');
-    const btn = document.getElementById('at-sound-btn');
-    btn.classList.add('unlocked');
-    btn.innerHTML = '&#10003; Sound enabled';
+    ['at-sound-btn','setup-sound-btn'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) { btn.classList.add('unlocked'); btn.innerHTML = '&#10003; Sound enabled — bell will ring on start'; }
+    });
+  });
+}
+
+function trainDisableAudio() {
+  trainSoundOn = false;
+  ['at-sound-btn','setup-sound-btn'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.classList.remove('unlocked'); btn.innerHTML = '&#128276; Enable boxing bell sound'; }
   });
 }
 
@@ -1932,10 +2048,10 @@ function buildTrainPhases() {
       ? TRAIN_ALL_EX[Math.floor(Math.random() * TRAIN_ALL_EX.length)]
       : trainSelEx;
     trainPhases.push({type:'combo', name:'Combo Work', detail:'Full intensity on the bag', dur: trainRoundLen, color: 'var(--accent)', cls: 'combo', round: r, ex});
+    trainPhases.push({type:'rest0', name:'Rest', detail:'Get ready for your exercise', dur: 20, color: 'var(--defense)', cls: 'rest-s', round: r, ex});
     trainPhases.push({type:'ex1', name: ex, detail:'Set 1 — go hard', dur: 40, color: 'var(--punch)', cls: 'ex', round: r, ex});
     trainPhases.push({type:'rest1', name:'Rest', detail:'Catch your breath', dur: 20, color: 'var(--defense)', cls: 'rest-s', round: r, ex});
     trainPhases.push({type:'ex2', name: ex, detail:'Set 2 — finish strong', dur: 40, color: 'var(--punch)', cls: 'ex', round: r, ex});
-    trainPhases.push({type:'rest2', name:'Rest', detail:'Get ready', dur: 20, color: 'var(--defense)', cls: 'rest-s', round: r, ex});
     if (r < trainRounds) trainPhases.push({type:'rest', name:'Rest', detail:'Bell rings for next round', dur: 60, color: 'var(--muted)', cls: 'rest', round: r, ex});
   }
 }
@@ -1964,6 +2080,11 @@ function trainLoadPhase() {
   document.getElementById('at-phase-lbl').textContent = phaseLabels[p.type] || 'REST';
   document.getElementById('at-round-lbl').textContent = `Round ${p.round} of ${trainRounds}`;
   document.getElementById('at-prog').style.background = p.color;
+  // Smaller timer during rest phases so screen feels balanced
+  const timerEl = document.getElementById('at-timer');
+  const isRest = p.type === 'rest0' || p.type === 'rest1' || p.type === 'rest';
+  timerEl.style.fontSize = isRest ? '52px' : '80px';
+  timerEl.style.marginBottom = isRest ? '4px' : '6px';
 
   // Exercise card
   const exCard = document.getElementById('at-ex-card');
@@ -1982,7 +2103,7 @@ function trainLoadPhase() {
     if (p.type === 'combo' && p.combo) {
       comboCard.style.display = 'block';
       document.getElementById('at-combo-name').textContent = p.combo.name;
-      document.getElementById('at-combo-seq').innerHTML = buildSequence(p.combo.seq);
+      document.getElementById('at-combo-seq').innerHTML = buildNumberedSequence(p.combo.seq);
     } else {
       comboCard.style.display = 'none';
     }
@@ -2026,9 +2147,13 @@ function trainNextPhase() {
   trainPhaseIdx++;
   if (trainPhaseIdx >= trainPhases.length) { trainDone(); return; }
   const p = trainPhases[trainPhaseIdx];
-  if (p.type === 'combo') { if (trainSoundOn) playBell('start'); }
-  else if (p.type === 'rest') { if (trainSoundOn) playBell('end'); }
-  else if (p.type === 'rest1' || p.type === 'rest2') { if (trainSoundOn) playBell('rest'); }
+  if (trainSoundOn) {
+    if (p.type === 'combo')                  playBell('start'); // single bell — round begins
+    else if (p.type === 'rest0')             playBell('rest');  // soft bell — get ready for exercise
+    else if (p.type === 'ex1' || p.type === 'ex2') playBell('start'); // single bell — exercise starts
+    else if (p.type === 'rest1')             playBell('rest');  // soft bell — rest between sets
+    else if (p.type === 'rest')              playBell('end');   // triple bell — between rounds
+  }
   trainPhaseStartTime = performance.now();
   trainLoadPhase();
   trainInterval = setTimeout(trainTick, 1000);
@@ -2037,10 +2162,36 @@ function trainNextPhase() {
 function trainUpdateDisplay() {
   document.getElementById('at-timer').textContent = trainFmt(trainTimeLeft);
   document.getElementById('at-prog').style.width = `${Math.round((trainTimeLeft / trainTotalPhaseTime) * 100)}%`;
+  const cur = trainPhases[trainPhaseIdx];
   const next = trainPhases[trainPhaseIdx + 1];
-  document.getElementById('at-next').textContent = next
-    ? `Next: ${next.name}${next.type === 'ex1' ? ' — Set 1' : next.type === 'ex2' ? ' — Set 2' : ''} in ${trainFmt(trainTimeLeft)}`
-    : 'Last phase — finish strong!';
+
+  // During between-round rest, show the upcoming combo as a preview card
+  const nextComboCard = document.getElementById('at-next-combo-card');
+  const nextComboName = document.getElementById('at-next-combo-name');
+  const nextComboSeq = document.getElementById('at-next-combo-seq');
+  if (nextComboCard) {
+    // Find the next combo phase ahead
+    let nextCombo = null;
+    for (let i = trainPhaseIdx + 1; i < trainPhases.length; i++) {
+      if (trainPhases[i].type === 'combo' && trainPhases[i].combo) { nextCombo = trainPhases[i]; break; }
+    }
+    if (cur.type === 'rest' && nextCombo) {
+      nextComboCard.style.display = 'block';
+      nextComboName.textContent = nextCombo.combo.name;
+      nextComboSeq.innerHTML = buildNumberedSequence(nextCombo.combo.seq);
+      document.getElementById('at-next').style.display = 'none';
+    } else {
+      nextComboCard.style.display = 'none';
+      document.getElementById('at-next').style.display = 'block';
+      document.getElementById('at-next').textContent = next
+        ? `Next: ${next.name}${next.type === 'ex1' ? ' — Set 1' : next.type === 'ex2' ? ' — Set 2' : ''} in ${trainFmt(trainTimeLeft)}`
+        : 'Last phase — finish strong!';
+    }
+  } else {
+    document.getElementById('at-next').textContent = next
+      ? `Next: ${next.name}${next.type === 'ex1' ? ' — Set 1' : next.type === 'ex2' ? ' — Set 2' : ''} in ${trainFmt(trainTimeLeft)}`
+      : 'Last phase — finish strong!';
+  }
 }
 
 let trainPauseTime = 0;
@@ -2083,7 +2234,7 @@ function trainEndSession() {
 function trainReset() {
   document.getElementById('train-active-wrap').classList.remove('show');
   document.getElementById('train-active-wrap').innerHTML = `
-    <button class="at-sound-btn" id="at-sound-btn" onclick="trainUnlockAudio()">&#128276; Tap to enable boxing bell sound</button>
+    <button class="at-sound-btn" id="at-sound-btn" onclick="trainSoundOn ? trainDisableAudio() : trainUnlockAudio()">&#128276; Enable boxing bell sound</button>
     <div class="at-phase-lbl" id="at-phase-lbl">COMBO WORK</div>
     <div class="at-timer combo" id="at-timer">3:00</div>
     <div class="at-round-lbl" id="at-round-lbl">Round 1 of 3</div>
@@ -2099,6 +2250,11 @@ function trainReset() {
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;" id="at-combo-seq"></div>
     </div>
     <div class="at-next" id="at-next">Next: Bodyweight Squats (Set 1) in 3:00</div>
+    <div id="at-next-combo-card" style="display:none;background:rgba(232,255,0,0.04);border:1px solid rgba(232,255,0,0.2);border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;font-weight:500;">Up Next — Round Combo</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px;" id="at-next-combo-name"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;" id="at-next-combo-seq"></div>
+    </div>
     <div class="at-btns">
       <button class="at-btn primary" id="at-pause-btn" onclick="trainTogglePause()">Pause</button>
       <button class="at-btn" onclick="trainSkipPhase()">Skip</button>
@@ -2392,16 +2548,17 @@ render();
       <div class="train-card-label">Round Preview — <span id="rp-total-time">6:00</span> per round</div>
       <div style="background:var(--black);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
         <div class="rp-row"><div class="rp-dot" style="background:var(--accent)"></div><div style="flex:1"><div class="rp-name">Combo work</div><div class="rp-sub">Full intensity on the bag</div></div><div class="rp-time" style="color:var(--accent)" id="rp-combo-time">3:00</div></div>
+        <div class="rp-row"><div class="rp-dot" style="background:var(--defense)"></div><div style="flex:1"><div class="rp-name">Rest</div><div class="rp-sub">Get ready for your exercise</div></div><div class="rp-time" style="color:var(--defense)">0:20</div></div>
         <div class="rp-row"><div class="rp-dot" style="background:var(--punch)"></div><div style="flex:1"><div class="rp-name" id="rp-ex1">Bodyweight Squats</div><div class="rp-sub">Set 1 — go hard</div></div><div class="rp-time" style="color:var(--punch)">0:40</div></div>
         <div class="rp-row"><div class="rp-dot" style="background:var(--defense)"></div><div style="flex:1"><div class="rp-name">Rest</div><div class="rp-sub">Catch your breath</div></div><div class="rp-time" style="color:var(--defense)">0:20</div></div>
         <div class="rp-row"><div class="rp-dot" style="background:var(--punch)"></div><div style="flex:1"><div class="rp-name" id="rp-ex2">Bodyweight Squats</div><div class="rp-sub">Set 2 — finish strong</div></div><div class="rp-time" style="color:var(--punch)">0:40</div></div>
-        <div class="rp-row"><div class="rp-dot" style="background:var(--defense)"></div><div style="flex:1"><div class="rp-name">Rest</div><div class="rp-sub">Next round coming</div></div><div class="rp-time" style="color:var(--defense)">0:20</div></div>
         <div class="rp-row"><div class="rp-dot" style="background:var(--border-light)"></div><div style="flex:1"><div class="rp-name">Rest between rounds</div><div class="rp-sub">Bell rings to start next round</div></div><div class="rp-time" style="color:var(--muted)">1:00</div></div>
       </div>
       <div class="train-total">
         <div class="train-total-lbl">Total workout time</div>
         <div class="train-total-val" id="train-total-display">18:00</div>
       </div>
+      <button id="setup-sound-btn" class="at-sound-btn" onclick="trainSoundOn ? trainDisableAudio() : trainUnlockAudio()" style="margin-bottom:10px;">&#128276; Enable boxing bell sound</button>
       <button class="train-start-btn" onclick="startTrainSession()">START SESSION</button>
     </div>
 
@@ -2411,13 +2568,14 @@ render();
         <div class="train-total-lbl">Total workout time</div>
         <div class="train-total-val" id="auto-total-display">18:00</div>
       </div>
+      <button id="setup-sound-btn" class="at-sound-btn" onclick="trainSoundOn ? trainDisableAudio() : trainUnlockAudio()" style="margin-bottom:10px;">&#128276; Enable boxing bell sound</button>
       <button class="train-start-btn" onclick="startAutoSession()">START AUTO SESSION</button>
     </div>
 
   </div>
 
   <div class="active-train" id="train-active-wrap">
-    <button class="at-sound-btn" id="at-sound-btn" onclick="trainUnlockAudio()">&#128276; Tap to enable boxing bell sound</button>
+    <button class="at-sound-btn" id="at-sound-btn" onclick="trainSoundOn ? trainDisableAudio() : trainUnlockAudio()">&#128276; Enable boxing bell sound</button>
     <div class="at-phase-lbl" id="at-phase-lbl">COMBO WORK</div>
     <div class="at-timer combo" id="at-timer">3:00</div>
     <div class="at-round-lbl" id="at-round-lbl">Round 1 of 3</div>
@@ -2433,6 +2591,11 @@ render();
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;" id="at-combo-seq"></div>
     </div>
     <div class="at-next" id="at-next">Next: Bodyweight Squats (Set 1) in 3:00</div>
+    <div id="at-next-combo-card" style="display:none;background:rgba(232,255,0,0.04);border:1px solid rgba(232,255,0,0.2);border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;font-weight:500;">Up Next — Round Combo</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px;" id="at-next-combo-name"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;" id="at-next-combo-seq"></div>
+    </div>
     <div class="at-btns">
       <button class="at-btn primary" id="at-pause-btn" onclick="trainTogglePause()">Pause</button>
       <button class="at-btn" onclick="trainSkipPhase()">Skip</button>
