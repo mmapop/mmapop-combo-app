@@ -1669,6 +1669,7 @@ function switchTab(tab) {
 
 // ===== BOXING BELL SOUND =====
 let audioCtx = null;
+let silentPingInterval = null;
 
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1676,15 +1677,68 @@ function getAudioCtx() {
 }
 
 function resumeAudio() {
-  if (audioCtx && audioCtx.state === 'suspended') {
-    return audioCtx.resume();
+  if (!audioCtx) return Promise.resolve();
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+    return audioCtx.resume().catch(() => {});
   }
   return Promise.resolve();
 }
 
-// Resume audio on any user interaction to prevent iOS suspension
-document.addEventListener('touchstart', () => resumeAudio(), { passive: true });
-document.addEventListener('click', () => resumeAudio(), { passive: true });
+// ── STRATEGY 1: Resume on any user tap/click ─────────────────────────────────
+// iOS requires a gesture to unlock audio — catch every tap as a resume opportunity
+function _onUserGesture() {
+  resumeAudio();
+}
+document.addEventListener('touchstart', _onUserGesture, { passive: true });
+document.addEventListener('touchend', _onUserGesture, { passive: true });
+document.addEventListener('click', _onUserGesture, { passive: true });
+
+// ── STRATEGY 2: Resume on visibility change (coming back from background) ─────
+// When user switches back to the app, iOS resumes the page — we catch that here
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    resumeAudio().then(() => {
+      // If sound was enabled, update button state to confirm still active
+      if (trainSoundOn) {
+        ['at-sound-btn', 'setup-sound-btn'].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) {
+            btn.classList.add('unlocked');
+            btn.innerHTML = '&#10003; Sound enabled — bell will ring on start';
+          }
+        });
+      }
+    });
+  }
+});
+
+// ── STRATEGY 3: Silent keep-alive ping every 25 seconds ──────────────────────
+// Plays a completely silent buffer to keep iOS from suspending the AudioContext
+function playSilentPing() {
+  if (!audioCtx || !trainSoundOn) return;
+  try {
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+  } catch(e) {}
+}
+
+function startSilentPing() {
+  stopSilentPing();
+  silentPingInterval = setInterval(() => {
+    resumeAudio();
+    playSilentPing();
+  }, 25000);
+}
+
+function stopSilentPing() {
+  if (silentPingInterval) {
+    clearInterval(silentPingInterval);
+    silentPingInterval = null;
+  }
+}
 
 function playBell(type) {
   const ctx = getAudioCtx();
@@ -1759,12 +1813,7 @@ function playBell(type) {
   }
 }
 
-// Keep AudioContext alive during long sessions — ping every 30 seconds
-setInterval(() => {
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume().catch(() => {});
-  }
-}, 30000);
+// Silent keep-alive is handled by startSilentPing()
 
 // ===== DRILLED STATE =====
 let drilled = {};
@@ -1975,6 +2024,7 @@ function trainUnlockAudio() {
   ctx.resume().then(() => {
     trainSoundOn = true;
     playBell('start');
+    startSilentPing(); // keep iOS audio alive
     ['at-sound-btn','setup-sound-btn'].forEach(id => {
       const btn = document.getElementById(id);
       if (btn) { btn.classList.add('unlocked'); btn.innerHTML = '&#10003; Sound enabled — bell will ring on start'; }
@@ -1984,6 +2034,7 @@ function trainUnlockAudio() {
 
 function trainDisableAudio() {
   trainSoundOn = false;
+  stopSilentPing();
   ['at-sound-btn','setup-sound-btn'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) { btn.classList.remove('unlocked'); btn.innerHTML = '&#128276; Enable boxing bell sound'; }
@@ -2215,6 +2266,7 @@ function trainSkipPhase() { trainNextPhase(); }
 function trainDone() {
   clearTimeout(trainInterval);
   trainInterval = null;
+  stopSilentPing();
   if (trainSoundOn) playBell('end');
   document.getElementById('train-active-wrap').innerHTML = `
     <div class="at-done">
@@ -2228,6 +2280,7 @@ function trainDone() {
 function trainEndSession() {
   clearTimeout(trainInterval);
   trainInterval = null;
+  stopSilentPing();
   trainReset();
 }
 
